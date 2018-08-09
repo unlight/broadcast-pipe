@@ -15,11 +15,17 @@ export function on(name: string) {
     channel(name).addEventListener('message', (e: MessageEvent) => {
         value = e.data;
     });
-    return function(target: any, property: string | symbol, descriptor: PropertyDescriptor) {
-        // todo: handle old property
-        descriptor.get = () => {
-            return value;
-        };
+    const get = () => value;
+    const set = (newValue: any) => {
+        value = newValue;
+    };
+    return function(prototype: any, property: string | symbol, descriptor: PropertyDescriptor = {}) {
+        if (descriptor.get) {
+            throw new TypeError(`Getter cannot be decoratorated by on`);
+        }
+        descriptor.get = get;
+        descriptor.set = set;
+        Object.defineProperty(prototype, property, descriptor);
     };
 }
 
@@ -33,15 +39,17 @@ export function off(name: string) {
 }
 
 export function reactLifeCyclable(): ClassDecorator {
-    return function(target: any) {
-        const componentDidMount = target.componentDidMount;
-        const componentWillUnMount = target.componentWillUnMount;
+    return function(type: any) {
+        const componentDidMount = type.componentDidMount;
+        const componentWillUnMount = type.componentWillUnMount;
 
-        target.componentDidMount = function() {
-            componentDidMount.apply(this, arguments);
+        type.prototype.componentDidMount = function() {
+            if (componentDidMount) {
+                componentDidMount.apply(this, arguments);
+            }
         };
 
-        target.componentWillUnmount = function() {
+        type.componentWillUnmount = function() {
             componentWillUnMount.apply(this, arguments);
         };
     };
