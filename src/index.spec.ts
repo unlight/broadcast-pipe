@@ -1,6 +1,6 @@
 /* eslint-disable import/no-duplicates, tslint/config */
 import * as assert from 'assert';
-import { on, emit, reactLifeCyclable } from './index';
+import { on, emit, reactLifeCyclable, testGetData, off } from './index';
 import * as lib from './index';
 import { injector } from 'njct';
 import { EventEmitter } from 'events';
@@ -56,12 +56,21 @@ class MockBroadcastChannel extends EventEmitter implements BroadcastChannel {
 }
 
 class BaseComponent {
-    state: any;
+    state: any = {};
+    setState(state: any) { this.state = { ...this.state, ...state }; }
     componentDidMount() { }
-    setState(state: any) { this.state = state; }
+    componentWillUnmount() { }
 }
 
 injector.mock('BroadcastChannel', () => MockBroadcastChannel);
+
+let component, component1, component11, component2;
+
+afterEach(() => {
+    const { events, channels } = testGetData();
+    assert.equal(events.length, 0, 'events are not empty');
+    assert.equal(Object.keys(channels).length, 0, 'channels are not empty');
+});
 
 it('smoke', () => {
     assert(lib);
@@ -71,26 +80,28 @@ it('on field', () => {
     class Dummy {
         @on('event') field = 1;
     }
-    const c = new Dummy();
+    const dummy = new Dummy();
     emit('event', 42);
-    assert.strictEqual(c.field, 42);
+    off('event');
+    assert.strictEqual(dummy.field, 42);
 });
 
 it('on get property', () => {
     assert.throws(() => {
         class Panchama {
-            @on('event') get getProp() { }
+            @on('event') get getProp() { return 1; }
         }
     });
 });
 
 it('on set property', () => {
-    class Repeat {
+    class TestClass {
         @on('event') set setProp(value: any) { }
     }
-    const c = new Repeat();
+    const test = new TestClass();
     emit('event', 42);
-    assert.strictEqual(c.setProp, 42);
+    off('event');
+    assert.strictEqual(test.setProp, 42);
 });
 
 it('reactLifeCyclable decorator', () => {
@@ -98,13 +109,14 @@ it('reactLifeCyclable decorator', () => {
     class Component extends BaseComponent {
         @on('event') property;
     }
-    const c = new Component();
-    c.componentDidMount();
+    component = new Component();
+    component.componentDidMount();
     emit('event', 42);
-    assert.deepEqual(c.state, { property: 42 });
+    assert.deepEqual(component.state, { property: 42 });
+    component.componentWillUnmount();
 });
 
-it.only('reactLifeCyclable decorator with one event for several components ', () => {
+it('reactLifeCyclable decorator with one event for several components ', () => {
     @reactLifeCyclable()
     class Component1 extends BaseComponent {
         @on('event') property;
@@ -113,11 +125,48 @@ it.only('reactLifeCyclable decorator with one event for several components ', ()
     class Component2 extends BaseComponent {
         @on('event') property;
     }
-    const c1 = new Component1();
-    const c2 = new Component2();
-    c1.componentDidMount();
-    c2.componentDidMount();
+    component1 = new Component1();
+    component2 = new Component2();
+    component1.componentDidMount();
+    component2.componentDidMount();
     emit('event', 42);
-    assert.deepEqual(c1.state, { property: 42 });
-    assert.deepEqual(c2.state, { property: 42 });
+    assert.deepEqual(component1.state, { property: 42 });
+    assert.deepEqual(component2.state, { property: 42 });
+    component1.componentWillUnmount();
+    component2.componentWillUnmount();
+});
+
+it.only('reactLifeCyclable decorator several events', () => {
+    @reactLifeCyclable()
+    class Component extends BaseComponent {
+        @on('event1') property1;
+        @on('event2') property2;
+    }
+    component = new Component();
+    component.componentDidMount();
+    emit('event1', 42);
+    emit('event2', 'XLII');
+    assert.deepEqual(component.state, { property1: 42, property2: 'XLII' });
+    component.componentWillUnmount();
+});
+
+it('reactLifeCyclable decorator several components with one event ', () => {
+    @reactLifeCyclable()
+    class Component1 extends BaseComponent {
+        @on('event') property;
+    }
+    @reactLifeCyclable()
+    class Component2 extends BaseComponent {
+        @on('event') property;
+    }
+    component1 = new Component1();
+    component11 = new Component1();
+    component2 = new Component2();
+    component1.componentDidMount();
+    component11.componentDidMount();
+    component2.componentDidMount();
+    emit('event', 42);
+    component1.componentWillUnmount();
+    component11.componentWillUnmount();
+    component2.componentWillUnmount();
 });
