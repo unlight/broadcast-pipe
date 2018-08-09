@@ -27,6 +27,7 @@ const tslintConfigRules = Object.assign({},
         'typedef': false,
         'newline-before-return': false,
         'interface-name': false,
+        'ban-types': false,
     }
 );
 
